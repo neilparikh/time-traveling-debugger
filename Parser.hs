@@ -1,6 +1,5 @@
 module Parser where
 import Text.Parsec hiding (runParser)
-import Data.Char          (isDigit, isAlpha)
 import Control.Monad.Identity
 
 import Types
@@ -13,9 +12,13 @@ parseProgram = map (resolveError . parseCommand) . lines
 runParser :: Parser a -> String -> Either ParseError a
 runParser parser = parse parser "(source)"
 
+parseCommand :: String -> Either ParseError Command
 parseCommand = runParser commandParser
+
+parseExpr :: String -> Either ParseError Expr
 parseExpr = runParser exprParser
 
+resolveError :: Either ParseError c -> c
 resolveError = either (error . show) id
 
 commandParser :: Parser Command

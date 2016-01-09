@@ -10,15 +10,15 @@ import Parser (commandParser, runParser, resolveError)
 type ProgramState = (Program, Program, Env, [String], [String])
 
 debug :: Program -> [String] -> IO ()
-debug program stdin = debugHelper [(program, [], initialEnv, [], stdin)]
+debug program stdinStream = debugHelper [(program, [], initialEnv, [], stdinStream)]
 
 debugHelper :: [ProgramState] -> IO ()
-debugHelper allStates@(state:states) = do
+debugHelper allStates@(state:_) = do
   putStr "\27[34m> "
   hFlush stdout
-  command <- getLine
+  option <- getLine
   putStr "\27[0m"
-  case command of
+  case option of
     "f" -> debugHelper (stepForward allStates)
     "b" -> debugHelper (stepBackward allStates)
     ('r':num) -> do
@@ -38,21 +38,25 @@ debugHelper allStates@(state:states) = do
 debugHelper rest = error . show $ rest
 
 stepForward :: [ProgramState] -> [ProgramState]
-stepForward allStates@(((next:rest), executed, env, stdout, stdin):_) = (rest, next:executed, newEnv, newStdout, newStdin):allStates
+stepForward [] = []
+stepForward allStates@(([], _, _, _, _):_) = allStates
+stepForward allStates@(((next:rest), executed, env, stdoutStream, stdinStream):_) = (rest, next:executed, newEnv, newStdoutStream, newStdinStream):allStates
   where
-  (newEnv, newStdout, newStdin) = execute (env, stdout, stdin) next
+  (newEnv, newStdoutStream, newStdinStream) = execute (env, stdoutStream, stdinStream) next
 
 stepBackward :: [ProgramState] -> [ProgramState]
-stepBackward (last:rest) = rest
+stepBackward [] = []
+stepBackward (_:rest) = rest
 
 replaceLine :: Command -> Int -> ProgramState -> ProgramState
-replaceLine newCommand 0 ((next:rest), executed, env, stdout, stdin) = ((newCommand:rest), executed, env, stdout, stdin)
-replaceLine newCommand count ((next:rest), executed, env, stdout, stdin) = ((next:newProgram), executed, env, stdout, stdin)
+replaceLine _ _ oldState@([], _, _, _, _) = oldState
+replaceLine newCommand 0 ((_:rest), executed, env, stdoutStream, stdinStream) = ((newCommand:rest), executed, env, stdoutStream, stdinStream)
+replaceLine newCommand count ((nextLine:rest), executed, env, stdoutStream, stdinStream) = ((nextLine:newProgram), executed, env, stdoutStream, stdinStream)
   where
-  (newProgram, _, _, _, _) = replaceLine newCommand (count - 1) (rest, executed, env, stdout, stdin)
+  (newProgram, _, _, _, _) = replaceLine newCommand (count - 1) (rest, executed, env, stdoutStream, stdinStream)
 
 showCurrentPosition :: ProgramState -> String
 showCurrentPosition (remaining, executed, _, _, _) = ((unlines . map show . reverse) executed) ++ "------------\n" ++ ((unlines . map show) remaining)
 
 showCurrentIO :: ProgramState -> String
-showCurrentIO (_, _, _, stdout, stdin) = unlines ["stdin: ", show stdin, "stdout: ", (show . reverse) stdout]
+showCurrentIO (_, _, _, stdoutStream, stdinStream) = unlines ["stdin: ", show stdinStream, "stdout: ", (show . reverse) stdoutStream]
